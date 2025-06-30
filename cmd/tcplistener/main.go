@@ -66,10 +66,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("ERROR: could parse request: %s", err)
 		}
-		fmt.Println("Request line:")
-		fmt.Printf("- Method: %s\n", request.RequestLine.Method)
-		fmt.Printf("- Target: %s\n", request.RequestLine.RequestTarget)
-		fmt.Printf("- Version: %s\n", request.RequestLine.HttpVersion)
+		request.Print()
 		fmt.Printf("Connection has been closed.\n")
 	}
 }

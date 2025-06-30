@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/lucoand/httpfromtcp/internal/headers"
@@ -11,12 +12,14 @@ import (
 
 const requestStateInitialized int = 0
 const requestStateParsingHeaders = 1
-const requestStateDone int = 2
+const requestStateParsingBody = 2
+const requestStateDone int = 3
 const bufferSize = 8
 
 type Request struct {
 	Headers     headers.Headers
 	RequestLine RequestLine
+	Body        []byte
 	state       int
 }
 
@@ -24,6 +27,18 @@ type RequestLine struct {
 	HttpVersion   string
 	RequestTarget string
 	Method        string
+}
+
+func (r RequestLine) print() {
+	fmt.Println("Request line:")
+	fmt.Printf("- Method: %s\n", r.Method)
+	fmt.Printf("- Target: %s\n", r.RequestTarget)
+	fmt.Printf("- Version: %s\n", r.HttpVersion)
+}
+
+func (r *Request) Print() {
+	r.RequestLine.print()
+	r.Headers.Print()
 }
 
 func newRequest() *Request {
@@ -41,6 +56,15 @@ func isUpper(s string) bool {
 	}
 	return true
 }
+
+// func isDigit(s string) bool {
+// 	for _, r := range s {
+// 		if r < '0' || r > '9' {
+// 			return false
+// 		}
+// 	}
+// 	return true
+// }
 
 func (r *Request) parseSingle(dataString string) (int, error) {
 	requestLine, n, err := parseRequestLine(dataString)
@@ -61,20 +85,51 @@ func (r *Request) parseHeaders(data []byte) (int, error) {
 		return 0, err
 	}
 	if done {
-		r.state = requestStateDone
+		r.state = requestStateParsingBody
 	}
 	return n, nil
+}
+
+func (r *Request) parseBody(data []byte) (int, error) {
+	v := r.Headers.Get("content-length")
+	if v == "" {
+		r.state = requestStateDone
+		return 0, nil
+	}
+	length, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, err
+	}
+	if length == 0 {
+		r.state = requestStateDone
+		return 0, nil
+	}
+	if len(data) == 0 {
+		return 0, fmt.Errorf("attempted to add empty data slice to body")
+	}
+	r.Body = append(r.Body, data...)
+	if len(r.Body) > length {
+		return 0, fmt.Errorf("Body length exceeds content-length header value")
+	}
+	if len(r.Body) == length {
+		r.state = requestStateDone
+		fmt.Println("Consumed entire length of data given")
+	}
+	return len(data), nil
 }
 
 func (r *Request) parse(data []byte) (int, error) {
 	switch r.state {
 	case requestStateInitialized:
-		fmt.Println("Parsing Request Line")
+		// fmt.Println("Parsing Request Line")
 		dataString := string(data)
 		return r.parseSingle(dataString)
 	case requestStateParsingHeaders:
-		fmt.Println("Parsing Headers")
+		// fmt.Println("Parsing Headers")
 		return r.parseHeaders(data)
+	case requestStateParsingBody:
+		fmt.Println("Parsing body:")
+		return r.parseBody(data)
 	case requestStateDone:
 		return 0, fmt.Errorf("Error: trying to read data in a done state")
 	default:
@@ -120,16 +175,16 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	readToIndex := 0
 	numParsed := 0
 	for r.state != requestStateDone {
-		if len(buf) == cap(buf) {
+		if len(buf) <= readToIndex {
 			temp := make([]byte, len(buf)*2, cap(buf)*2)
 			copy(temp, buf)
 			buf = temp
 		}
 		numBytesRead, err := reader.Read(buf[readToIndex:])
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
+		// if errors.Is(err, io.EOF) && !strings.Contains(string(buf[:readToIndex]), headers.CRLF) {
+		// 	break
+		// }
+		if err != nil && !errors.Is(err, io.EOF) {
 			return nil, err
 		}
 		readToIndex += numBytesRead
@@ -146,7 +201,22 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		readToIndex -= numParsed
 	}
 	if r.state != requestStateDone {
+		// if r.state == requestStateInitialized {
+		// 	fmt.Println("Request State= initialized")
+		// }
+		// if r.state == requestStateParsingHeaders {
+		// 	fmt.Println("Request State= parsing headers")
+		// }
 		return nil, fmt.Errorf("Parsing finished unexpectedly - incomplete request")
 	}
+	// fmt.Printf("Request line:\n")
+	// fmt.Printf("Method: %s\n", r.RequestLine.Method)
+	// fmt.Printf("Target: %s\n", r.RequestLine.RequestTarget)
+	// fmt.Printf("Version: %s\n", r.RequestLine.HttpVersion)
+	// fmt.Printf("Headers:\n")
+	// for key, value := range r.Headers {
+	// 	fmt.Printf("%s: %s\n", key, value)
+	// }
+	// fmt.Println()
 	return r, nil
 }
