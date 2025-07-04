@@ -181,9 +181,9 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			buf = temp
 		}
 		numBytesRead, err := reader.Read(buf[readToIndex:])
-		// if errors.Is(err, io.EOF) && !strings.Contains(string(buf[:readToIndex]), headers.CRLF) {
-		// 	break
-		// }
+		if errors.Is(err, io.EOF) && !strings.Contains(string(buf[:readToIndex]), headers.CRLF) {
+			break
+		}
 		if err != nil && !errors.Is(err, io.EOF) {
 			return nil, err
 		}
