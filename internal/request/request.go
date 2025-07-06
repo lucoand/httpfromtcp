@@ -11,8 +11,8 @@ import (
 )
 
 const requestStateInitialized int = 0
-const requestStateParsingHeaders = 1
-const requestStateParsingBody = 2
+const requestStateParsingHeaders int = 1
+const requestStateParsingBody int = 2
 const requestStateDone int = 3
 const bufferSize = 8
 
@@ -39,6 +39,8 @@ func (r RequestLine) print() {
 func (r *Request) Print() {
 	r.RequestLine.print()
 	r.Headers.Print()
+	fmt.Println("Body:")
+	fmt.Printf("%s\n", r.Body)
 }
 
 func newRequest() *Request {
@@ -76,6 +78,7 @@ func (r *Request) parseSingle(dataString string) (int, error) {
 	}
 	r.RequestLine = requestLine
 	r.state = requestStateParsingHeaders
+	// fmt.Println("Request Line Parsed - Now parsing Headers")
 	return n, nil
 }
 
@@ -85,6 +88,8 @@ func (r *Request) parseHeaders(data []byte) (int, error) {
 		return 0, err
 	}
 	if done {
+		// fmt.Println("Headers Parsed - Now parsing body")
+		// fmt.Printf("Content Length inside of parseHeaders(): %v\n", r.Headers.Get("content-length"))
 		r.state = requestStateParsingBody
 	}
 	return n, nil
@@ -92,6 +97,7 @@ func (r *Request) parseHeaders(data []byte) (int, error) {
 
 func (r *Request) parseBody(data []byte) (int, error) {
 	v := r.Headers.Get("content-length")
+	// fmt.Printf("Content-Length: %s\n", v)
 	if v == "" {
 		r.state = requestStateDone
 		return 0, nil
@@ -128,7 +134,7 @@ func (r *Request) parse(data []byte) (int, error) {
 		// fmt.Println("Parsing Headers")
 		return r.parseHeaders(data)
 	case requestStateParsingBody:
-		fmt.Println("Parsing body:")
+		// fmt.Println("Parsing body:")
 		return r.parseBody(data)
 	case requestStateDone:
 		return 0, fmt.Errorf("Error: trying to read data in a done state")
@@ -181,13 +187,13 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			buf = temp
 		}
 		numBytesRead, err := reader.Read(buf[readToIndex:])
-		if errors.Is(err, io.EOF) && !strings.Contains(string(buf[:readToIndex]), headers.CRLF) {
-			break
-		}
 		if err != nil && !errors.Is(err, io.EOF) {
 			return nil, err
 		}
 		readToIndex += numBytesRead
+		if errors.Is(err, io.EOF) && !strings.Contains(string(buf[:readToIndex]), "\n") && r.state != requestStateParsingBody {
+			break
+		}
 		numParsed, err = r.parse(buf[:readToIndex])
 		if err != nil {
 			return nil, err
@@ -218,5 +224,10 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	// 	fmt.Printf("%s: %s\n", key, value)
 	// }
 	// fmt.Println()
+	// fmt.Println("----------------")
+	// fmt.Println("Parsing complete")
+	// r.Headers.Print()
+	// fmt.Printf("%s\n", r.Body)
+	// fmt.Println("----------------")
 	return r, nil
 }
