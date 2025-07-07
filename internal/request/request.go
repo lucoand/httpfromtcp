@@ -186,17 +186,31 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			copy(temp, buf)
 			buf = temp
 		}
-		numBytesRead, err := reader.Read(buf[readToIndex:])
-		if err != nil && !errors.Is(err, io.EOF) {
-			return nil, err
+		numBytesRead, readErr := reader.Read(buf[readToIndex:])
+		if readErr != nil && !errors.Is(readErr, io.EOF) {
+			return nil, readErr
 		}
 		readToIndex += numBytesRead
-		if errors.Is(err, io.EOF) && !strings.Contains(string(buf[:readToIndex]), "\n") && r.state != requestStateParsingBody {
-			break
+		for _, c := range buf[:numBytesRead] {
+			if c == '\r' {
+				fmt.Print("\\r")
+			} else if c == '\n' {
+				fmt.Print("\\n")
+			} else {
+				fmt.Printf("%c", c)
+			}
 		}
+		fmt.Println()
+		// if errors.Is(readErr, io.EOF) && !strings.Contains(string(buf[:readToIndex]), "\n") && r.state != requestStateParsingBody {
+		// 	break
+		// }
+		var err error = nil
 		numParsed, err = r.parse(buf[:readToIndex])
 		if err != nil {
 			return nil, err
+		}
+		if errors.Is(readErr, io.EOF) && numParsed == 0 {
+			break
 		}
 		if numParsed == 0 {
 			continue

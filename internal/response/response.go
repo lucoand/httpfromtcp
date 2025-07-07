@@ -15,7 +15,7 @@ const (
 	StatusINTERNAL                     // 500
 )
 
-func writeErrorHelper(err error, n int, line []byte) error {
+func WriteErrorHelper(err error, n int, line []byte) error {
 	if err != nil {
 		return err
 	}
@@ -30,20 +30,20 @@ func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
 	case StatusOK:
 		line := []byte("HTTP/1.1 200 OK\r\n")
 		n, err := w.Write(line)
-		return writeErrorHelper(err, n, line)
+		return WriteErrorHelper(err, n, line)
 	case StatusBADREQUEST:
 		line := []byte("HTTP/1.1 400 Bad Request\r\n")
 		n, err := w.Write(line)
-		return writeErrorHelper(err, n, line)
+		return WriteErrorHelper(err, n, line)
 	case StatusINTERNAL:
 		line := []byte("HTTP/1.1 500 Internal Server Error\r\n")
 		n, err := w.Write(line)
-		return writeErrorHelper(err, n, line)
+		return WriteErrorHelper(err, n, line)
 	default:
 		lineString := "HTTP/1.1 " + fmt.Sprintf("%d \r\n", statusCode)
 		line := []byte(lineString)
 		n, err := w.Write(line)
-		return writeErrorHelper(err, n, line)
+		return WriteErrorHelper(err, n, line)
 	}
 }
 
@@ -60,7 +60,7 @@ func WriteHeaders(w io.Writer, headers headers.Headers) error {
 		headerString := k + ": " + v + "\r\n"
 		headerBytes := []byte(headerString)
 		n, err := w.Write(headerBytes)
-		err = writeErrorHelper(err, n, headerBytes)
+		err = WriteErrorHelper(err, n, headerBytes)
 		if err != nil {
 			return err
 		}
@@ -68,5 +68,5 @@ func WriteHeaders(w io.Writer, headers headers.Headers) error {
 	headersEndString := "\r\n"
 	headersEndBytes := []byte(headersEndString)
 	n, err := w.Write(headersEndBytes)
-	return writeErrorHelper(err, n, headersEndBytes)
+	return WriteErrorHelper(err, n, headersEndBytes)
 }
